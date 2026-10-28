@@ -1,12 +1,21 @@
-import Script from "next/script";
-
 /**
- * Carrega, nesta ordem, dentro do <head> (o Next injeta scripts
- * beforeInteractive no head independente de onde o componente é renderizado):
+ * Carrega, nesta ordem, logo no início do <body>:
  * 1. Consent Mode v2 com os defaults (tudo negado, exceto o funcional/segurança)
  *    e, se já houver escolha salva, o update correspondente.
- * 2. O snippet do GTM.
- * O <noscript> com o iframe fica logo após a abertura do <body>.
+ * 2. O snippet do GTM: inicializa o dataLayer/gtag e injeta o gtm.js do
+ *    container via JavaScript (sem `<script src>` declarativo no JSX).
+ *
+ * As duas tags são `<script>` inline nativas (Server Component), para
+ * aparecerem como texto literal no HTML, na ordem exata em que estão aqui.
+ * Um `<script src="...gtm.js">` declarativo foi evitado de propósito: o
+ * React/Next promove (hoisting) tags `<script src>` para o `<head>` de forma
+ * assíncrona e desacoplada da posição no JSX, o que já quebrou a garantia de
+ * que o Consent Mode roda antes do GTM. Carregando o gtm.js via
+ * `document.createElement` dentro do próprio script inline, a ordem de
+ * execução passa a ser a ordem real do documento, sem hoisting.
+ *
+ * O <noscript> com o iframe (fallback sem JS) fica logo em seguida, ainda no
+ * início do <body>.
  *
  * Nada aqui é configurado dentro do GTM/GA4: isso fica para o dono do projeto.
  */
@@ -42,32 +51,21 @@ export default function GtmScript() {
   `;
 
   const gtmScript = `
-    (function (w, d, s, l, i) {
-      w[l] = w[l] || [];
-      w[l].push({ 'gtm.start': new Date().getTime(), event: 'gtm.js' });
-      var f = d.getElementsByTagName(s)[0],
-        j = d.createElement(s),
-        dl = l != 'dataLayer' ? '&l=' + l : '';
-      j.async = true;
-      j.src = 'https://www.googletagmanager.com/gtm.js?id=' + i + dl;
-      f.parentNode.insertBefore(j, f);
-    })(window, document, 'script', 'dataLayer', '${gtmId}');
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    (function () {
+      var s = document.createElement('script');
+      s.async = true;
+      s.src = 'https://www.googletagmanager.com/gtm.js?id=${gtmId}';
+      document.head.appendChild(s);
+    })();
   `;
 
   return (
     <>
-      {/* eslint-disable-next-line @next/next/no-before-interactive-script-outside-document -- padrão oficial do App Router para o root layout */}
-      <Script
-        id="consent-default"
-        strategy="beforeInteractive"
-        dangerouslySetInnerHTML={{ __html: consentDefaultScript }}
-      />
-      {/* eslint-disable-next-line @next/next/no-before-interactive-script-outside-document -- padrão oficial do App Router para o root layout */}
-      <Script
-        id="gtm-script"
-        strategy="beforeInteractive"
-        dangerouslySetInnerHTML={{ __html: gtmScript }}
-      />
+      <script id="consent-default" dangerouslySetInnerHTML={{ __html: consentDefaultScript }} />
+      <script id="gtm-script" dangerouslySetInnerHTML={{ __html: gtmScript }} />
       <noscript>
         <iframe
           src={`https://www.googletagmanager.com/ns.html?id=${gtmId}`}

@@ -287,6 +287,11 @@ Não é um evento nomeado, mas também é um push no `dataLayer`, feito antes de
   ```
   Se já existir uma escolha salva em `localStorage` (`cookie_consent`), o mesmo script já envia um
   `update` em seguida, antes do GTM carregar.
+- Em seguida, o snippet do GTM (container `NEXT_PUBLIC_GTM_ID`) empurra `gtag('js', new Date())`
+  e só então injeta o `gtm.js` via `document.createElement`. As duas tags são `<script>` inline
+  (sem `src` declarativo no JSX), porque o React/Next promove `<script src>` para o `<head>` de
+  forma assíncrona e fora de ordem — o que quebraria a garantia de que o consentimento é aplicado
+  antes do GTM carregar. Veja o comentário em `components/GtmScript.tsx` para o detalhe.
 - **Update**, disparado pelo `lib/consent.ts` sempre que o usuário escolhe no banner/modal:
   ```js
   gtag('consent', 'update', {
